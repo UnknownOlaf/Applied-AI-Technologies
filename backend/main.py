@@ -4,7 +4,8 @@ import torch
 
 app = FastAPI()
 model = load_model()
-class_names = ['fresh', 'rotten']  # classes
+class_names = ['freshapples', 'freshbanana', 'freshoranges', 'rottenapples', 'rottenbanana', 'rottenoranges']
+
 
 @app.get("/")
 def root():
