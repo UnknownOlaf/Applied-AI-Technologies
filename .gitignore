@@ -1,0 +1,10 @@
+# Ignore downloaded dataset folder
+backend/dataset/
+*.zip
+
+# ignore PyTorch model checkpoints
+*.pt
+
+# ignore Python environment
+.venv/
+__pycache__/
