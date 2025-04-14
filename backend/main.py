@@ -2,6 +2,16 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from model.model_loader import load_model, preprocess_image
 import torch
+from pydantic import BaseModel
+from typing import Dict
+
+class PredictionResponse(BaseModel):
+    category: str
+    confidence: float
+    label: str
+    class_confidence: float
+    score: Dict[str, float]
+
 
 app = FastAPI()
 model = load_model()
@@ -20,7 +30,12 @@ app.add_middleware(
 def root():
     return {"message": "FoodCheck-API running"}
 
-@app.post("/predict/")
+@app.get("/ping")
+def ping():
+    return {"status": "ok"}
+
+
+@app.post("/predict/", response_model=PredictionResponse)
 async def predict(file: UploadFile = File(...)):
     image = await file.read()
     input_tensor = preprocess_image(image)
