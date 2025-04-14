@@ -3,7 +3,8 @@ backend/dataset/
 *.zip
 
 # ignore PyTorch model checkpoints
-*.pt
+# *.pt
+# still small enough to be in the repo
 
 # ignore Python environment
 .venv/
