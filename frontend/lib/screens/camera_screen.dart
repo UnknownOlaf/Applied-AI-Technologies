@@ -9,7 +9,8 @@ import '../widgets/loading_animation.dart';
 import '../widgets/bounce_button.dart';
 
 import 'dart:html' as html;
-import 'dart:ui' as ui;
+// Korrigierter Import für platformViewRegistry
+import 'dart:ui_web' as ui_web;
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({Key? key}) : super(key: key);
@@ -32,6 +33,10 @@ class _CameraScreenState extends State<CameraScreen>
   bool _showWebcam = false;
   bool _showConfirmButton = false;
   bool _isCapturing = false; // Neuer Status für die Aufnahme-Animation
+
+  // Eindeutige ID für die Webcam-View, die bei jedem Neustart inkrementiert wird
+  int _webcamViewId = 0;
+  String get _webcamViewType => 'webcamElement-$_webcamViewId';
 
   late AnimationController _animationController;
   late Animation<double> _fadeInAnimation;
@@ -62,20 +67,48 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   void _initializeWebCamera() {
+    // Stoppe vorherige Webcam-Instanz, falls vorhanden
+    _stopWebcam();
+
+    // Inkrementiere die View-ID für eine neue Instanz
+    _webcamViewId++;
+
+    // Erstelle ein neues Video-Element
     _webcamVideo = html.VideoElement()
       ..style.width = '100%'
-      ..autoplay = true;
+      ..style.height = '100%'
+      ..style.objectFit = 'cover'
+      ..autoplay = true
+      ..muted = true
+      ..setAttribute('playsinline', 'true');
 
-    html.window.navigator.mediaDevices
-        ?.getUserMedia({'video': true}).then((stream) {
-      _webcamVideo!.srcObject = stream;
-    });
-
-    // ignore: undefined_prefixed_name
-    ui.platformViewRegistry.registerViewFactory(
-      'webcamElement',
+    // Registriere eine neue View-Factory mit der aktualisierten ID
+    // Korrigierte Verwendung von platformViewRegistry
+    ui_web.platformViewRegistry.registerViewFactory(
+      _webcamViewType,
       (int viewId) => _webcamVideo!,
     );
+
+    // Verzögerung hinzufügen, um sicherzustellen, dass die UI aktualisiert wurde
+    Future.delayed(const Duration(milliseconds: 100), () {
+      // Zugriff auf die Kamera anfordern
+      html.window.navigator.mediaDevices
+          ?.getUserMedia({'video': true, 'audio': false}).then((stream) {
+        if (_webcamVideo != null) {
+          _webcamVideo!.srcObject = stream;
+
+          // Starte die Wiedergabe explizit
+          _webcamVideo!.play().catchError((error) {
+            print('Fehler beim Starten der Webcam: $error');
+          });
+        }
+      }).catchError((error) {
+        setState(() {
+          _error = 'Fehler beim Zugriff auf die Kamera: $error';
+          _showWebcam = false;
+        });
+      });
+    });
   }
 
   void _startWebcam() {
@@ -83,20 +116,27 @@ class _CameraScreenState extends State<CameraScreen>
       _showWebcam = true;
       _capturedWebImage = null;
       _showConfirmButton = false;
+      _image = null; // Zurücksetzen des ausgewählten Bildes
     });
+
     _initializeWebCamera();
   }
 
   // Methode zum Stoppen der Webcam
   void _stopWebcam() {
     if (_webcamVideo != null && _webcamVideo!.srcObject != null) {
-      // Alle Tracks des Streams stoppen
-      final mediaStream = _webcamVideo!.srcObject as html.MediaStream;
-      final tracks = mediaStream.getTracks();
-      for (final track in tracks) {
-        track.stop();
+      try {
+        // Alle Tracks des Streams stoppen
+        final mediaStream = _webcamVideo!.srcObject as html.MediaStream;
+        final tracks = mediaStream.getTracks();
+        for (final track in tracks) {
+          track.stop();
+        }
+        _webcamVideo!.srcObject = null;
+        _webcamVideo!.pause();
+      } catch (e) {
+        print('Fehler beim Stoppen der Webcam: $e');
       }
-      _webcamVideo!.srcObject = null;
     }
   }
 
@@ -109,27 +149,44 @@ class _CameraScreenState extends State<CameraScreen>
     // Kurze Verzögerung für den Blitz-Effekt
     Future.delayed(const Duration(milliseconds: 200), () {
       if (_webcamVideo != null) {
-        _canvas = html.CanvasElement(
-            width: _webcamVideo!.videoWidth, height: _webcamVideo!.videoHeight);
-        _canvasContext =
-            _canvas!.getContext('2d') as html.CanvasRenderingContext2D;
-        _canvasContext!.drawImage(_webcamVideo!, 0, 0);
+        try {
+          final videoWidth = _webcamVideo!.videoWidth;
+          final videoHeight = _webcamVideo!.videoHeight;
 
-        _canvas!.toBlob().then((blob) {
-          final reader = html.FileReader();
-          reader.readAsArrayBuffer(blob);
-          reader.onLoadEnd.listen((event) {
-            // Webcam stoppen nach der Aufnahme
-            _stopWebcam();
-
+          if (videoWidth == 0 || videoHeight == 0) {
             setState(() {
-              _capturedWebImage = reader.result as Uint8List;
-              _showConfirmButton = true;
-              _showWebcam = false; // Webcam-Anzeige ausblenden
-              _isCapturing = false; // Animation beenden
+              _error = 'Webcam ist nicht bereit. Bitte versuche es erneut.';
+              _isCapturing = false;
+            });
+            return;
+          }
+
+          _canvas = html.CanvasElement(width: videoWidth, height: videoHeight);
+          _canvasContext =
+              _canvas!.getContext('2d') as html.CanvasRenderingContext2D;
+          _canvasContext!.drawImage(_webcamVideo!, 0, 0);
+
+          _canvas!.toBlob('image/jpeg', 0.9).then((blob) {
+            final reader = html.FileReader();
+            reader.readAsArrayBuffer(blob);
+            reader.onLoadEnd.listen((event) {
+              // Webcam stoppen nach der Aufnahme
+              _stopWebcam();
+
+              setState(() {
+                _capturedWebImage = reader.result as Uint8List;
+                _showConfirmButton = true;
+                _showWebcam = false; // Webcam-Anzeige ausblenden
+                _isCapturing = false; // Animation beenden
+              });
             });
           });
-        });
+        } catch (e) {
+          setState(() {
+            _error = 'Fehler beim Aufnehmen des Bildes: $e';
+            _isCapturing = false;
+          });
+        }
       }
     });
   }
@@ -185,7 +242,7 @@ class _CameraScreenState extends State<CameraScreen>
           final multipartFile = http.MultipartFile.fromBytes(
             'file',
             _capturedWebImage!,
-            filename: 'captured.png',
+            filename: 'captured.jpg',
           );
           request.files.add(multipartFile);
         } else if (_image != null) {
@@ -440,10 +497,15 @@ class _CameraScreenState extends State<CameraScreen>
               ),
             ),
           ),
-          SizedBox(
+          Container(
             height: isSmallScreen ? 200 : 250,
             width: double.infinity,
-            child: HtmlElementView(viewType: 'webcamElement'),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            // Wichtig: Verwende die dynamische ID für die Webcam-View
+            child: HtmlElementView(viewType: _webcamViewType),
           ),
           const SizedBox(height: 10),
           BounceButton(
