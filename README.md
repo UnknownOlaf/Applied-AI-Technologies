@@ -24,3 +24,51 @@ Thanks to our contributors:
 </br>
 [D. Lagamtzis](https://github.com/DimiHMC)</br>
 [Peltzfa](https://github.com/peltzefa/)
+
+
+# FruitAI – Stack & Setup
+
+## Tech Stack
+
+- **Frontend:** Flutter (Dart, Web)
+- **Backend:** FastAPI (Python)
+- **ML Framework:** PyTorch
+- **HTTP Communication:** REST API (JSON)
+- **Image Handling:** image_picker (Flutter), FastAPI UploadFile
+- **Deployment:** Localhost (dev), ready for Docker/Cloud
+
+---
+
+## Setup Instructions
+
+### 1. Backend (FastAPI + PyTorch)
+
+```bash
+cd backend
+# (Optional) Create and activate a virtual environment
+# python -m venv venv
+# source venv/bin/activate  # or venv\Scripts\activate on Windows
+
+pip install -r requirements.txt
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 2. Frontend (Flutter Web, Dart)
+
+```bash
+cd frontend
+flutter pub get
+flutter run -d chrome
+# For production build:
+# flutter build web
+```
+
+---
+
+## Usage
+
+1. Start the backend (`uvicorn ...`).
+2. Start the frontend (`flutter run -d chrome`), which opens a browser window with the webapp running.
+3. Upload an image or use the webcam to analyze fruit.
+
+---
